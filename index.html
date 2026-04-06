@@ -364,10 +364,7 @@
             또한 전담 시간표 칸에 반 번호를 입력하면 같은 요일·교시의 해당 반 시간표에도 동일하게 반영됩니다.
           </li>
         </ol>
-        반 개수와 최대 교시를 정하고, 중복되면 안 되는 전담 과목/강사 과목을 먼저 선택하세요.
-        필요한 과목이 없으면 A~F를 활용할 수 있습니다.
-        시간표 칸을 클릭해 과목을 입력하면 전담 과목은 색으로 표시되고, 아래 전담 시간표에도 자동 기록됩니다.
-        아래 전담 시간표 칸에 반 번호를 입력하면 같은 요일·교시에 해당 반 시간표에도 동일하게 반영됩니다.
+        
       </section>
 
       <section class="controls" aria-label="표시 설정">
@@ -509,6 +506,12 @@
         if (!entry) return "";
         if (entry.subject === "체육" && entry.pePlace) {
           return `${entry.pePlace[0]}X`;
+        }
+        if (entry.subject.startsWith("강사")) {
+          const instructorNumber = entry.subject.replace("강사", "");
+          if (instructorNumber) {
+            return `강${instructorNumber}X`;
+          }
         }
         return `${entry.subject[0]}X`;
       }
@@ -669,6 +672,7 @@
               } else {
                 td.style.backgroundImage = "";
                 td.textContent = matchedEntries.map((entry) => entry.classNumber).join(", ");
+                td.style.background = matchedEntries.length ? "#e5e7eb" : "";
               }
 
               if (!td.textContent) {
