@@ -36,6 +36,23 @@
         text-align: center;
       }
 
+      .usage-guide {
+        max-width: 980px;
+        margin: 0 auto 14px;
+        padding: 12px 14px;
+        background: #ffffff;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(23, 42, 70, 0.06);
+        line-height: 1.5;
+        font-size: 0.9rem;
+      }
+
+      .usage-guide strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+
       .controls {
         display: flex;
         justify-content: center;
@@ -323,6 +340,13 @@
   <body>
     <main class="page">
       <h1>학급별 주간 시간표</h1>
+      <section class="usage-guide" aria-label="사용 방법 안내">
+        <strong>사용 방법</strong>
+        반 개수와 최대 교시를 정하고, 중복되면 안 되는 전담 과목/강사 과목을 먼저 선택하세요.
+        필요한 과목이 없으면 A~F를 활용할 수 있습니다.
+        시간표 칸을 클릭해 과목을 입력하면 전담 과목은 색으로 표시되고, 아래 전담 시간표에도 자동 기록됩니다.
+        아래 전담 시간표 칸에 반 번호를 입력하면 같은 요일·교시에 해당 반 시간표에도 동일하게 반영됩니다.
+      </section>
 
       <section class="controls" aria-label="표시 설정">
         <div class="control-group">
@@ -379,12 +403,15 @@
         { name: "음악", color: "#ddd6fe" },
         { name: "체육", color: "#bbf7d0" },
         { name: "실과", color: "#fed7aa" },
-        { name: "과목 A", color: "#f9a8d4" },
-        { name: "과목 B", color: "#fcd34d" },
-        { name: "과목 C", color: "#93c5fd" },
-        { name: "과목 D", color: "#86efac" },
-        { name: "과목 E", color: "#c4b5fd" },
-        { name: "과목 F", color: "#fca5a5" }
+        { name: "강사 1", color: "#a7f3d0" },
+        { name: "강사 2", color: "#fdba74" },
+        { name: "강사 3", color: "#f0abfc" },
+        { name: "A", color: "#f9a8d4" },
+        { name: "B", color: "#fcd34d" },
+        { name: "C", color: "#93c5fd" },
+        { name: "D", color: "#86efac" },
+        { name: "E", color: "#c4b5fd" },
+        { name: "F", color: "#fca5a5" }
       ];
 
       const classCountSelect = document.getElementById("classCountSelect");
@@ -607,6 +634,19 @@
                 td.style.backgroundImage = "";
                 td.textContent = matchedEntries.map((entry) => entry.classNumber).join(", ");
               }
+
+              td.style.cursor = "pointer";
+              td.title = "클릭해서 반 번호 입력";
+              td.setAttribute("tabindex", "0");
+              td.addEventListener("click", () => {
+                editSpecialistCell(tableName, day, period);
+              });
+              td.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  editSpecialistCell(tableName, day, period);
+                }
+              });
               row.appendChild(td);
             });
 
@@ -709,6 +749,15 @@
         return false;
       }
 
+      function assignEntryToClassCell(className, day, period, nextEntry) {
+        const key = getCellKey(className, day, period);
+        if (hasSpecialistConflict(className, day, period, nextEntry)) {
+          return false;
+        }
+        subjectStore[key] = nextEntry;
+        return true;
+      }
+
       function createClassTable(className, periods) {
         const card = document.createElement("article");
         card.className = "class-card";
@@ -790,11 +839,10 @@
                 nextEntry = { subject: "체육", pePlace };
               }
 
-              if (hasSpecialistConflict(className, day, period, nextEntry)) {
+              if (!assignEntryToClassCell(className, day, period, nextEntry)) {
                 return;
               }
 
-              subjectStore[key] = nextEntry;
               cell.textContent = getEntryDisplayText(nextEntry);
               applySpecialistSlotColors();
               renderSpecialistTimetables();
@@ -830,6 +878,53 @@
 
         applySpecialistSlotColors();
         renderSpecialistTimetables();
+      }
+
+      async function editSpecialistCell(tableName, day, period) {
+        const promptText = `${tableName} 전담 ${day} ${period}교시에 배정할 반 번호를 입력하세요 (1~${classCount}, 비우려면 공백).`;
+        const value = window.prompt(promptText, "");
+        if (value === null) return;
+
+        const trimmed = value.trim();
+        const classes = buildClasses(classCount);
+        const existingClass = classes.find((className) => {
+          const entry = getEntry(className, day, period);
+          return getEntryTableName(entry) === tableName;
+        });
+
+        if (!trimmed) {
+          if (!existingClass) return;
+          delete subjectStore[getCellKey(existingClass, day, period)];
+          renderTimetables();
+          return;
+        }
+
+        if (!/^\d+$/.test(trimmed)) {
+          window.alert(`반 번호는 1~${classCount} 범위의 숫자만 입력할 수 있습니다.`);
+          return;
+        }
+
+        const classNumber = Number(trimmed);
+        if (classNumber < 1 || classNumber > classCount) {
+          window.alert(`반 번호는 1~${classCount} 범위의 숫자만 입력할 수 있습니다.`);
+          return;
+        }
+
+        const className = `${classNumber}반`;
+        let nextEntry = { subject: tableName };
+        if (tableName === "체육") {
+          const defaultPlace =
+            getEntry(className, day, period)?.pePlace || getEntry(existingClass, day, period)?.pePlace || "강당";
+          const pePlace = await openPePlacePicker(defaultPlace);
+          if (pePlace === null) return;
+          nextEntry = { subject: "체육", pePlace };
+        }
+
+        if (!assignEntryToClassCell(className, day, period, nextEntry)) {
+          return;
+        }
+
+        renderTimetables();
       }
 
       function renderSpecialistOptions() {
