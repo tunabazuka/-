@@ -99,6 +99,16 @@
         cursor: pointer;
       }
 
+      .check-duplicate-btn {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 7px 10px;
+        background: #fef3c7;
+        font-size: 0.9rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
       .specialist-picker {
         position: relative;
         width: 260px;
@@ -513,6 +523,9 @@
         <div class="control-group">
           <button id="autoGenerateBtn" class="auto-generate-btn" type="button">자동 시간표 생성</button>
         </div>
+        <div class="control-group">
+          <button id="checkDuplicateBtn" class="check-duplicate-btn" type="button">중복 확인</button>
+        </div>
       </section>
 
       <section id="timetableGrid" class="timetable-grid" aria-label="시간표"></section>
@@ -601,6 +614,7 @@
       const autoGenerateRunBtn = document.getElementById("autoGenerateRunBtn");
       const autoGenerateCancelBtn = document.getElementById("autoGenerateCancelBtn");
       const lastPeriodBody = document.getElementById("lastPeriodBody");
+      const checkDuplicateBtn = document.getElementById("checkDuplicateBtn");
 
       let classCount = 6;
       let maxPeriodCount = 6;
@@ -1096,7 +1110,9 @@
         return count;
       }
 
-      function findAutoAssignableSlot(className, subject) {
+      function findRandomAutoAssignableSlot(className, subject) {
+        const candidates = [];
+
         for (let period = 1; period <= maxPeriodCount; period += 1) {
           for (const day of days) {
             if (isDisabledSlot(day, period)) continue;
@@ -1107,19 +1123,21 @@
               for (const pePlace of ["강당", "운동장"]) {
                 const candidate = { subject: "체육", pePlace };
                 if (!hasSpecialistConflict(className, day, period, candidate, false)) {
-                  return { day, period, entry: candidate };
+                  candidates.push({ day, period, entry: candidate });
                 }
               }
             } else {
               const candidate = { subject };
               if (!hasSpecialistConflict(className, day, period, candidate, false)) {
-                return { day, period, entry: candidate };
+                candidates.push({ day, period, entry: candidate });
               }
             }
           }
         }
 
-        return null;
+        if (!candidates.length) return null;
+        const randomIndex = Math.floor(Math.random() * candidates.length);
+        return candidates[randomIndex];
       }
 
       function runAutoGenerateFromSettings() {
@@ -1138,16 +1156,18 @@
 
         const shortages = {};
         const classes = buildClasses(classCount);
+        const shuffledClasses = [...classes].sort(() => Math.random() - 0.5);
 
-        classes.forEach((className) => {
-          subjectInputs.forEach((input) => {
+        shuffledClasses.forEach((className) => {
+          const shuffledInputs = [...subjectInputs].sort(() => Math.random() - 0.5);
+          shuffledInputs.forEach((input) => {
             const subject = input.dataset.subject;
             const target = targetCounts[subject];
             const assigned = countAssignedSubjectForClass(className, subject);
             let needed = Math.max(0, target - assigned);
 
             while (needed > 0) {
-              const slot = findAutoAssignableSlot(className, subject);
+              const slot = findRandomAutoAssignableSlot(className, subject);
               if (!slot) {
                 shortages[subject] = (shortages[subject] || 0) + needed;
                 break;
@@ -1172,6 +1192,59 @@
           window.alert(`일부 과목은 요청 시수를 모두 배치하지 못했습니다.\n${messageLines.join("\n")}`);
         } else {
           window.alert("자동 시간표 생성이 완료되었습니다.");
+        }
+      }
+
+      function checkDuplicateConflicts() {
+        const classes = buildClasses(classCount);
+        const issues = [];
+
+        for (let period = 1; period <= maxPeriodCount; period += 1) {
+          for (const day of days) {
+            const specialistMap = new Map();
+            const pePlaceMap = new Map();
+
+            classes.forEach((className) => {
+              const entry = getEntry(className, day, period);
+              if (!entry) return;
+
+              if (isDisabledSlot(day, period)) {
+                issues.push(`${day} ${period}교시 ${className}: 비활성화(X) 칸에 과목이 배치됨`);
+              }
+
+              if (!isSpecialistSubject(entry.subject)) return;
+
+              if (entry.subject === "체육") {
+                const peKey = entry.pePlace || "미지정";
+                if (!pePlaceMap.has(peKey)) pePlaceMap.set(peKey, []);
+                pePlaceMap.get(peKey).push(className);
+                return;
+              }
+
+              if (!specialistMap.has(entry.subject)) specialistMap.set(entry.subject, []);
+              specialistMap.get(entry.subject).push(className);
+            });
+
+            specialistMap.forEach((classList, subject) => {
+              if (classList.length > 1) {
+                issues.push(`${day} ${period}교시 ${subject}: ${classList.join(", ")}`);
+              }
+            });
+
+            pePlaceMap.forEach((classList, pePlace) => {
+              if (classList.length > 1) {
+                issues.push(`${day} ${period}교시 체육(${pePlace}): ${classList.join(", ")}`);
+              }
+            });
+          }
+        }
+
+        if (issues.length) {
+          const detail = issues.slice(0, 12).map((issue) => `- ${issue}`).join("\n");
+          const more = issues.length > 12 ? `\n... 외 ${issues.length - 12}건` : "";
+          window.alert(`중복이 있습니다.\n${detail}${more}`);
+        } else {
+          window.alert("중복이 없습니다.");
         }
       }
 
@@ -1442,6 +1515,12 @@
         });
       }
 
+      function setupDuplicateCheck() {
+        checkDuplicateBtn.addEventListener("click", () => {
+          checkDuplicateConflicts();
+        });
+      }
+
       fillSelectOptions(classCountSelect, 1, 12, classCount);
       fillSelectOptions(periodCountSelect, 1, 9, maxPeriodCount);
 
@@ -1458,6 +1537,7 @@
       setupSpecialistDropdown();
       setupPePicker();
       setupAutoGenerate();
+      setupDuplicateCheck();
       renderSpecialistOptions();
       renderTimetables();
     </script>
