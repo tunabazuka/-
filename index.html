@@ -373,6 +373,40 @@
         background: #dbeafe;
       }
 
+      .last-period-config {
+        margin-top: 12px;
+        border-top: 1px dashed #cbd5e1;
+        padding-top: 10px;
+      }
+
+      .last-period-config h3 {
+        margin: 0 0 6px;
+        font-size: 0.92rem;
+      }
+
+      .last-period-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .last-period-table th,
+      .last-period-table td {
+        border: 1px solid var(--line);
+        height: 34px;
+        font-size: 0.82rem;
+      }
+
+      .last-period-toggle {
+        cursor: pointer;
+        font-weight: 700;
+        user-select: none;
+      }
+
+      .last-period-toggle.disabled {
+        color: #dc2626;
+        background: #fee2e2;
+      }
+
       .section-divider {
         border: 0;
         border-top: 2px dashed #cbd5e1;
@@ -416,6 +450,13 @@
       .specialist-conflict-hint {
         color: #6b7280;
         font-weight: 600;
+      }
+
+      .disabled-slot {
+        background: #f3f4f6 !important;
+        color: #dc2626 !important;
+        font-weight: 700 !important;
+        cursor: not-allowed !important;
       }
 
       @media (max-width: 1400px) {
@@ -497,10 +538,26 @@
       </div>
     </div>
 
-    <div id="autoGenerateModal" class="auto-modal" aria-hidden="true">
+      <div id="autoGenerateModal" class="auto-modal" aria-hidden="true">
       <div class="auto-dialog" role="dialog" aria-modal="true" aria-label="자동 시간표 생성 설정">
         <h2>자동 시간표 생성 설정</h2>
         <div id="autoGenerateRows"></div>
+        <section class="last-period-config" aria-label="요일별 마지막 교시 사용 여부">
+          <h3>요일별 마지막 교시 사용 여부 (클릭 시 X 표시)</h3>
+          <table class="last-period-table">
+            <thead>
+              <tr>
+                <th>교시</th>
+                <th>월</th>
+                <th>화</th>
+                <th>수</th>
+                <th>목</th>
+                <th>금</th>
+              </tr>
+            </thead>
+            <tbody id="lastPeriodBody"></tbody>
+          </table>
+        </section>
         <div class="auto-actions">
           <button type="button" id="autoGenerateRunBtn" class="run-btn">자동 생성 실행</button>
           <button type="button" id="autoGenerateCancelBtn">취소</button>
@@ -543,12 +600,14 @@
       const autoGenerateRows = document.getElementById("autoGenerateRows");
       const autoGenerateRunBtn = document.getElementById("autoGenerateRunBtn");
       const autoGenerateCancelBtn = document.getElementById("autoGenerateCancelBtn");
+      const lastPeriodBody = document.getElementById("lastPeriodBody");
 
       let classCount = 6;
       let maxPeriodCount = 6;
 
       const subjectStore = {};
       const selectedSpecialists = new Set();
+      const disabledLastPeriodDays = new Set();
       const specialistColorMap = Object.fromEntries(
         specialistSubjects.map((subject) => [subject.name, subject.color])
       );
@@ -640,6 +699,58 @@
         return Object.values(subjectStore).some((entry) => entry?.subject === "체육");
       }
 
+      function isDisabledSlot(day, period) {
+        return period === maxPeriodCount && disabledLastPeriodDays.has(day);
+      }
+
+      function clearDisabledLastPeriodEntriesForDay(day) {
+        const classes = buildClasses(classCount);
+        for (const className of classes) {
+          const key = getCellKey(className, day, maxPeriodCount);
+          delete subjectStore[key];
+        }
+      }
+
+      function clearAllDisabledSlotEntries() {
+        disabledLastPeriodDays.forEach((day) => {
+          clearDisabledLastPeriodEntriesForDay(day);
+        });
+      }
+
+      function renderLastPeriodToggleRow() {
+        lastPeriodBody.innerHTML = "";
+        const row = document.createElement("tr");
+
+        const periodCell = document.createElement("th");
+        periodCell.textContent = `${maxPeriodCount}교시`;
+        row.appendChild(periodCell);
+
+        days.forEach((day) => {
+          const cell = document.createElement("td");
+          cell.className = "last-period-toggle";
+          const disabled = disabledLastPeriodDays.has(day);
+          if (disabled) {
+            cell.classList.add("disabled");
+            cell.textContent = "X";
+          } else {
+            cell.textContent = "사용";
+          }
+          cell.addEventListener("click", () => {
+            if (disabledLastPeriodDays.has(day)) {
+              disabledLastPeriodDays.delete(day);
+            } else {
+              disabledLastPeriodDays.add(day);
+              clearDisabledLastPeriodEntriesForDay(day);
+            }
+            renderLastPeriodToggleRow();
+            renderTimetables();
+          });
+          row.appendChild(cell);
+        });
+
+        lastPeriodBody.appendChild(row);
+      }
+
       function openAutoGenerateModal() {
         const subjects = Array.from(selectedSpecialists);
         autoGenerateRows.innerHTML = "";
@@ -663,6 +774,7 @@
           autoGenerateRows.appendChild(row);
         });
 
+        renderLastPeriodToggleRow();
         autoGenerateModal.classList.add("open");
         autoGenerateModal.setAttribute("aria-hidden", "false");
       }
@@ -770,6 +882,14 @@
             days.forEach((day) => {
               const td = document.createElement("td");
               const matchedEntries = [];
+              const isDisabled = isDisabledSlot(day, period);
+
+              if (isDisabled) {
+                td.classList.add("disabled-slot");
+                td.textContent = "X";
+                row.appendChild(td);
+                return;
+              }
 
               classes.forEach((className) => {
                 const entry = getEntry(className, day, period);
@@ -876,6 +996,17 @@
           const className = cell.dataset.className;
           const day = cell.dataset.day;
           const period = Number(cell.dataset.period);
+          const disabled = isDisabledSlot(day, period);
+
+          if (disabled) {
+            clearRestrictionHints(cell);
+            cell.classList.add("disabled-slot");
+            cell.textContent = "X";
+            cell.style.backgroundImage = "";
+            cell.style.backgroundColor = "";
+            return;
+          }
+          cell.classList.remove("disabled-slot");
 
           const entry = getEntry(className, day, period);
           const slotRefs = getSlotSpecialistReferences(day, period);
@@ -968,6 +1099,7 @@
       function findAutoAssignableSlot(className, subject) {
         for (let period = 1; period <= maxPeriodCount; period += 1) {
           for (const day of days) {
+            if (isDisabledSlot(day, period)) continue;
             const existing = getEntry(className, day, period);
             if (existing) continue;
 
@@ -1091,11 +1223,17 @@
             const period = periodIndex + 1;
             const key = getCellKey(className, day, period);
             const currentEntry = subjectStore[key];
+            const isDisabled = isDisabledSlot(day, period);
 
             cell.dataset.className = className;
             cell.dataset.day = day;
             cell.dataset.period = String(period);
-            cell.textContent = getEntryDisplayText(currentEntry);
+            if (isDisabled) {
+              cell.classList.add("disabled-slot");
+              cell.textContent = "X";
+            } else {
+              cell.textContent = getEntryDisplayText(currentEntry);
+            }
 
             const editCell = async () => {
               const existingEntry = subjectStore[key];
@@ -1133,13 +1271,15 @@
               renderSpecialistTimetables();
             };
 
-            cell.addEventListener("click", editCell);
-            cell.addEventListener("keydown", (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                editCell();
-              }
-            });
+            if (!isDisabled) {
+              cell.addEventListener("click", editCell);
+              cell.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  editCell();
+                }
+              });
+            }
 
             row.appendChild(cell);
           });
@@ -1153,6 +1293,7 @@
       }
 
       function renderTimetables() {
+        clearAllDisabledSlotEntries();
         const classes = buildClasses(classCount);
         const periods = buildPeriods(maxPeriodCount);
 
