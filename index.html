@@ -1578,6 +1578,7 @@
             }
 
             const editCell = async () => {
+              if (!confirmEditIfConflictHint(cell)) return;
               const existingEntry = subjectStore[key];
               const current = existingEntry ? existingEntry.subject : "";
               const value = window.prompt(
