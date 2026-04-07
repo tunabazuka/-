@@ -1075,11 +1075,12 @@
                   }
                   td.textContent = entry.classNumber;
                 } else if (matchedEntries.length > 1) {
-                  const colors = matchedEntries.map((entry) => pePlaceColorMap[entry.pePlace]).filter(Boolean);
+                  const ordered = ["강당", "운동장"]
+                    .map((place) => matchedEntries.find((entry) => entry.pePlace === place))
+                    .filter(Boolean);
+                  const colors = ordered.map((entry) => pePlaceColorMap[entry.pePlace]).filter(Boolean);
                   td.style.backgroundImage = buildMultiColorGradient(colors);
-                  td.textContent = matchedEntries
-                    .map((entry) => `${entry.pePlace === "강당" ? "강" : "운"}${entry.classNumber}`)
-                    .join(" / ");
+                  td.textContent = ordered.map((entry) => entry.classNumber).join(" / ");
                 } else {
                   td.style.backgroundImage = "";
                   td.textContent = "";
@@ -1660,6 +1661,17 @@
         return assignments;
       }
 
+      function getPeAssignmentByPlace(day, period, pePlace) {
+        const classes = buildClasses(classCount);
+        for (const className of classes) {
+          const entry = getEntry(className, day, period);
+          if (entry?.subject === "체육" && entry.pePlace === pePlace) {
+            return { className, entry };
+          }
+        }
+        return null;
+      }
+
       async function applySpecialistDropdownSelection(tableName, day, period, selectedClassNumber) {
         const existingAssignments = getSpecialistAssignmentsAtSlot(tableName, day, period);
         const backup = existingAssignments.map((item) => ({
@@ -1703,6 +1715,36 @@
         renderTimetables();
       }
 
+      async function applyPePlaceDropdownSelection(day, period, pePlace, selectedClassNumber) {
+        const existing = getPeAssignmentByPlace(day, period, pePlace);
+        const backup = existing
+          ? [{ key: getCellKey(existing.className, day, period), entry: existing.entry }]
+          : [];
+
+        if (!selectedClassNumber) {
+          backup.forEach((item) => {
+            delete subjectStore[item.key];
+          });
+          renderTimetables();
+          return;
+        }
+
+        const className = `${selectedClassNumber}반`;
+        backup.forEach((item) => {
+          delete subjectStore[item.key];
+        });
+
+        const nextEntry = { subject: "체육", pePlace };
+        if (!assignEntryToClassCell(className, day, period, nextEntry, true, "manual", true)) {
+          backup.forEach((item) => {
+            subjectStore[item.key] = item.entry;
+          });
+          renderTimetables();
+          return;
+        }
+        renderTimetables();
+      }
+
       function editSpecialistCell(cell, tableName, day, period) {
         document.querySelectorAll(".class-select-menu").forEach((menu) => menu.remove());
 
@@ -1733,9 +1775,27 @@
           }
         };
 
-        renderOptions(async (classNumber) => {
-          await applySpecialistDropdownSelection(tableName, day, period, classNumber);
-        });
+        if (tableName === "체육") {
+          const gymTitle = document.createElement("div");
+          gymTitle.className = "class-select-section-title";
+          gymTitle.textContent = "강당";
+          menu.appendChild(gymTitle);
+          renderOptions(async (classNumber) => {
+            await applyPePlaceDropdownSelection(day, period, "강당", classNumber);
+          });
+
+          const groundTitle = document.createElement("div");
+          groundTitle.className = "class-select-section-title";
+          groundTitle.textContent = "운동장";
+          menu.appendChild(groundTitle);
+          renderOptions(async (classNumber) => {
+            await applyPePlaceDropdownSelection(day, period, "운동장", classNumber);
+          });
+        } else {
+          renderOptions(async (classNumber) => {
+            await applySpecialistDropdownSelection(tableName, day, period, classNumber);
+          });
+        }
 
         cell.appendChild(menu);
       }
