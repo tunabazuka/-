@@ -1413,6 +1413,17 @@
           }
         }
 
+      function hasSubjectInOtherPeriodSameDay(className, day, period, subject) {
+        for (let currentPeriod = 1; currentPeriod <= maxPeriodCount; currentPeriod += 1) {
+          if (currentPeriod === period) continue;
+          const entry = getEntry(className, day, currentPeriod);
+          if (!entry) continue;
+          if (subject === "체육") {
+            if (entry.subject === "체육") return true;
+          } else if (entry.subject === subject) {
+            return true;
+          }
+        }
         return false;
       }
 
@@ -1647,6 +1658,7 @@
             }
 
             const editCell = async () => {
+              if (!confirmEditIfConflictHint(cell)) return;
               const existingEntry = subjectStore[key];
               const current = existingEntry ? existingEntry.subject : "";
               const value = window.prompt(
