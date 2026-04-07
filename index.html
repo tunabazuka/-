@@ -346,7 +346,7 @@
 
       .auto-row {
         display: grid;
-        grid-template-columns: 1fr 84px;
+        grid-template-columns: 1fr 96px 150px;
         align-items: center;
         gap: 10px;
         margin-bottom: 8px;
@@ -361,6 +361,58 @@
         border: 1px solid var(--line);
         border-radius: 7px;
         padding: 5px 7px;
+      }
+
+      .auto-field {
+        display: grid;
+        gap: 2px;
+      }
+
+      .auto-field-title {
+        font-size: 0.72rem;
+        color: #6b7280;
+        font-weight: 700;
+      }
+
+      .teacher-picker {
+        position: relative;
+      }
+
+      .teacher-toggle {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        padding: 5px 7px;
+        text-align: left;
+        cursor: pointer;
+        font-size: 0.85rem;
+      }
+
+      .teacher-menu {
+        display: none;
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(100% + 4px);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 4px 16px rgba(23, 42, 70, 0.12);
+        z-index: 10;
+      }
+
+      .teacher-menu.open {
+        display: block;
+      }
+
+      .teacher-option {
+        width: 100%;
+        border: 0;
+        background: #fff;
+        padding: 7px 8px;
+        text-align: left;
+        cursor: pointer;
       }
 
       .auto-actions {
@@ -620,6 +672,7 @@
       const selectedSpecialists = new Set();
       const disabledLastPeriodDays = new Set();
       const autoGenerateSubjectCounts = {};
+      const subjectTeacherAssignments = {};
       const allSpecialistSubjectNames = new Set(specialistSubjects.map((subject) => subject.name));
       const specialistColorMap = Object.fromEntries(
         specialistSubjects.map((subject) => [subject.name, subject.color])
@@ -656,6 +709,10 @@
 
       function getEntry(className, day, period) {
         return subjectStore[getCellKey(className, day, period)] || null;
+      }
+
+      function getAssignedTeacher(subject) {
+        return subjectTeacherAssignments[subject] || "";
       }
 
       function getEntryColor(entry) {
@@ -775,6 +832,11 @@
           const label = document.createElement("label");
           label.textContent = subject;
 
+          const hourField = document.createElement("div");
+          hourField.className = "auto-field";
+          const hourTitle = document.createElement("span");
+          hourTitle.className = "auto-field-title";
+          hourTitle.textContent = "시수";
           const input = document.createElement("input");
           input.type = "number";
           input.min = "0";
@@ -787,8 +849,40 @@
             autoGenerateSubjectCounts[subject] =
               Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
           });
+          hourField.append(hourTitle, input);
 
-          row.append(label, input);
+          const teacherField = document.createElement("div");
+          teacherField.className = "auto-field";
+          const teacherTitle = document.createElement("span");
+          teacherTitle.className = "auto-field-title";
+          teacherTitle.textContent = "담당 교사";
+          const teacherPicker = document.createElement("div");
+          teacherPicker.className = "teacher-picker";
+          const teacherToggle = document.createElement("button");
+          teacherToggle.type = "button";
+          teacherToggle.className = "teacher-toggle";
+          teacherToggle.textContent = getAssignedTeacher(subject) || "미지정";
+          const teacherMenu = document.createElement("div");
+          teacherMenu.className = "teacher-menu";
+          ["미지정", "교사1", "교사2", "교사3"].forEach((teacherName) => {
+            const option = document.createElement("button");
+            option.type = "button";
+            option.className = "teacher-option";
+            option.textContent = teacherName;
+            option.addEventListener("click", () => {
+              subjectTeacherAssignments[subject] = teacherName === "미지정" ? "" : teacherName;
+              teacherToggle.textContent = teacherName;
+              teacherMenu.classList.remove("open");
+            });
+            teacherMenu.appendChild(option);
+          });
+          teacherToggle.addEventListener("click", () => {
+            teacherMenu.classList.toggle("open");
+          });
+          teacherPicker.append(teacherToggle, teacherMenu);
+          teacherField.append(teacherTitle, teacherPicker);
+
+          row.append(label, hourField, teacherField);
           autoGenerateRows.appendChild(row);
         });
 
@@ -1096,6 +1190,17 @@
             }
             return true;
           }
+
+          const nextTeacher = getAssignedTeacher(nextEntry.subject);
+          const existingTeacher = getAssignedTeacher(existing.subject);
+          if (nextTeacher && existingTeacher && nextTeacher === existingTeacher) {
+            if (showAlert) {
+              window.alert(
+                `${day} ${period}교시에는 이미 다른 반에 ${nextTeacher} 담당 과목(${existing.subject})이 배치되어 있습니다.`
+              );
+            }
+            return true;
+          }
         }
 
         return false;
@@ -1296,6 +1401,7 @@
           for (const day of days) {
             const specialistMap = new Map();
             const pePlaceMap = new Map();
+            const teacherMap = new Map();
 
             classes.forEach((className) => {
               const entry = getEntry(className, day, period);
@@ -1306,6 +1412,12 @@
               }
 
               if (!isSpecialistSubject(entry.subject)) return;
+
+              const assignedTeacher = getAssignedTeacher(entry.subject);
+              if (assignedTeacher) {
+                if (!teacherMap.has(assignedTeacher)) teacherMap.set(assignedTeacher, []);
+                teacherMap.get(assignedTeacher).push(`${className}(${entry.subject})`);
+              }
 
               if (entry.subject === "체육") {
                 const peKey = entry.pePlace || "미지정";
@@ -1327,6 +1439,12 @@
             pePlaceMap.forEach((classList, pePlace) => {
               if (classList.length > 1) {
                 issues.push(`${day} ${period}교시 체육(${pePlace}): ${classList.join(", ")}`);
+              }
+            });
+
+            teacherMap.forEach((assignments, teacher) => {
+              if (assignments.length > 1) {
+                issues.push(`${day} ${period}교시 ${teacher} 중복: ${assignments.join(", ")}`);
               }
             });
           }
@@ -1603,6 +1721,13 @@
           if (event.target === autoGenerateModal) {
             closeAutoGenerateModal();
           }
+        });
+
+        document.addEventListener("click", (event) => {
+          if (event.target.closest(".teacher-picker")) return;
+          autoGenerateModal.querySelectorAll(".teacher-menu.open").forEach((menu) => {
+            menu.classList.remove("open");
+          });
         });
       }
 
