@@ -751,6 +751,12 @@
             return `강${instructorNumber}X`;
           }
         }
+        if (entry.subject.startsWith("강사")) {
+          const instructorNumber = entry.subject.replace("강사", "");
+          if (instructorNumber) {
+            return `강${instructorNumber}X`;
+          }
+        }
         return `${entry.subject[0]}X`;
       }
 
