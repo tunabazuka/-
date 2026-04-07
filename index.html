@@ -921,7 +921,8 @@
                 if (entryTableName === tableName) {
                   matchedEntries.push({
                     classNumber: className.replace("반", ""),
-                    pePlace: entry?.pePlace || null
+                    pePlace: entry?.pePlace || null,
+                    source: entry?.source || "manual"
                   });
                 }
               });
@@ -929,6 +930,7 @@
               td.style.fontWeight = "700";
               td.style.color = "#111827";
               td.style.background = "";
+              td.style.textDecoration = "none";
 
               if (tableName === "체육") {
                 if (matchedEntries.length === 1) {
@@ -953,6 +955,9 @@
                 td.style.backgroundImage = "";
                 td.textContent = matchedEntries[0]?.classNumber || "";
                 td.style.background = matchedEntries.length ? "#e5e7eb" : "";
+                if (matchedEntries.length && matchedEntries[0].source !== "auto") {
+                  td.style.textDecoration = "underline";
+                }
               }
 
               if (!td.textContent) {
@@ -1028,6 +1033,7 @@
             cell.textContent = "X";
             cell.style.backgroundImage = "";
             cell.style.backgroundColor = "";
+            cell.style.textDecoration = "none";
             return;
           }
           cell.classList.remove("disabled-slot");
@@ -1038,6 +1044,9 @@
           clearRestrictionHints(cell);
 
           if (entry && entry.subject) {
+            const manualEntry = (entry.source || "manual") !== "auto";
+            const underline = manualEntry && entry.subject !== "체육";
+            cell.style.textDecoration = underline ? "underline" : "none";
             if (isSpecialistSubject(entry.subject)) {
               cell.style.backgroundImage = "";
               cell.style.backgroundColor = getEntryColor(entry);
@@ -1051,14 +1060,17 @@
           if (slotColors.length > 1) {
             cell.style.backgroundImage = buildMultiColorGradient(slotColors);
             cell.style.backgroundColor = "";
+            cell.style.textDecoration = "none";
             renderRestrictionHints(cell, slotRefs);
           } else if (slotColors.length === 1) {
             cell.style.backgroundImage = "";
             cell.style.backgroundColor = slotColors[0];
+            cell.style.textDecoration = "none";
             renderRestrictionHints(cell, slotRefs);
           } else {
             cell.style.backgroundColor = "";
             cell.style.backgroundImage = "";
+            cell.style.textDecoration = "none";
           }
         });
       }
