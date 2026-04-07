@@ -1272,7 +1272,9 @@
         const conflictMessage = getSpecialistConflictMessage(className, day, period, nextEntry);
         if (conflictMessage) {
           if (allowConflictOverride) {
-            const proceed = window.confirm("충돌되는데도 계속 입력하겠습니까?");
+            const proceed = window.confirm(
+              "현재 선택은 기존 시간표와 중복되거나 충돌할 수 있습니다. 그래도 계속 진행하시겠습니까?"
+            );
             if (!proceed) return false;
           } else {
             if (showAlert) window.alert(conflictMessage);
