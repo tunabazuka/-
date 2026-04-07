@@ -356,7 +356,8 @@
         font-weight: 700;
       }
 
-      .auto-row input {
+      .auto-row input,
+      .auto-row select {
         width: 100%;
         border: 1px solid var(--line);
         border-radius: 7px;
@@ -534,6 +535,7 @@
 
       .credit-note a {
         color: inherit;
+        text-decoration: underline;
       }
 
       .specialist-conflict-hint {
@@ -869,14 +871,17 @@
           const hourTitle = document.createElement("span");
           hourTitle.className = "auto-field-title";
           hourTitle.textContent = "시수";
-          const input = document.createElement("input");
-          input.type = "number";
-          input.min = "0";
-          input.step = "1";
-          input.value = String(autoGenerateSubjectCounts[subject] ?? 1);
+          const input = document.createElement("select");
           input.dataset.subject = subject;
           input.setAttribute("aria-label", `${subject} 주당 시수`);
-          input.addEventListener("input", () => {
+          for (let hour = 1; hour <= 5; hour += 1) {
+            const option = document.createElement("option");
+            option.value = String(hour);
+            option.textContent = `${hour}`;
+            input.appendChild(option);
+          }
+          input.value = String(autoGenerateSubjectCounts[subject] ?? 1);
+          input.addEventListener("change", () => {
             const parsed = Number(input.value);
             autoGenerateSubjectCounts[subject] =
               Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
@@ -896,7 +901,7 @@
           teacherToggle.textContent = getAssignedTeacher(subject) || "미지정";
           const teacherMenu = document.createElement("div");
           teacherMenu.className = "teacher-menu";
-          ["미지정", "교사1", "교사2", "교사3"].forEach((teacherName) => {
+          ["미지정", "교사1", "교사2", "교사3", "교사4", "교사5"].forEach((teacherName) => {
             const option = document.createElement("button");
             option.type = "button";
             option.className = "teacher-option";
@@ -1368,7 +1373,7 @@
       }
 
       function runAutoGenerateFromSettings() {
-        const subjectInputs = Array.from(autoGenerateRows.querySelectorAll("input[data-subject]"));
+        const subjectInputs = Array.from(autoGenerateRows.querySelectorAll("[data-subject]"));
         if (!subjectInputs.length) {
           window.alert("전담 과목에서 체크된 항목이 없습니다. 전담 과목을 먼저 선택해 주세요.");
           return;
