@@ -486,18 +486,11 @@
     <main class="page">
       <h1>학급별 주간 시간표</h1>
       <section class="usage-guide" aria-label="사용 방법 안내">
-        <ol>
-          <li>반 개수와 최대 교시를 정하고, 중복되면 안 되는 전담 과목/강사 과목을 먼저 선택하세요.</li>
-          <li>필요한 과목이 없으면 A~F를 활용할 수 있습니다.</li>
-          <li>
-            시간표 칸을 클릭해 과목을 입력하면 전담 과목은 색으로 표시되고 아래 전담 시간표에도 자동 기록됩니다.
-            또한 전담 시간표 칸에 반 번호를 입력하면 같은 요일·교시의 해당 반 시간표에도 동일하게 반영됩니다.
-          </li>
-          <li>
-            자동 시간표 생성은 체육 배치 후 사용할 수 있으며, 전담 과목 시수를 설정해 실행하면 자동 배치됩니다.
-            다시 실행하면 수동 확정/체육/X 설정은 유지한 채 새로운 무작위 배치로 다시 생성됩니다.
-          </li>
-        </ol>
+        반 개수와 최대 교시를 먼저 정하고, 전담 과목에서 필요한 과목(없으면 A~F/강사1~3)을 체크하세요.
+        자동 생성 전에는 체육을 먼저 배치해야 하며, 마지막 교시 X 설정으로 요일별 마지막 교시 사용 여부를 정할 수 있습니다.
+        학급 시간표 칸에 과목을 직접 입력하거나, 전담 시간표 칸에 반 번호를 입력해도 같은 위치에 서로 연동됩니다.
+        자동 생성은 설정한 시수대로 전담 과목을 배치하고, 다시 실행해도 수동 확정값/체육/X 설정은 유지됩니다.
+        마지막으로 중복 확인 버튼으로 충돌 여부를 빠르게 점검하세요.
         <div class="credit-note">제작: github: azkabantuna · 치다랑어의 블로그</div>
       </section>
 
@@ -532,16 +525,14 @@
         </div>
       </section>
 
-      <section id="timetableGrid" class="timetable-grid" aria-label="시간표"></section>
-
-      <hr class="section-divider" />
-
       <section id="specialistArea" aria-label="전담 시간표 영역">
         <h2 class="specialist-area-title">전담 시간표</h2>
         <div id="specialistGrid" class="specialist-grid"></div>
       </section>
 
-      <p class="credit-note">출처: azkabantuna · 치다랑어의 블로그</p>
+      <hr class="section-divider" />
+
+      <section id="timetableGrid" class="timetable-grid" aria-label="시간표"></section>
     </main>
 
     <div id="pePickerModal" class="pe-picker-modal" aria-hidden="true">
@@ -627,6 +618,7 @@
       const selectedSpecialists = new Set();
       const disabledLastPeriodDays = new Set();
       const autoGenerateSubjectCounts = {};
+      const allSpecialistSubjectNames = new Set(specialistSubjects.map((subject) => subject.name));
       const specialistColorMap = Object.fromEntries(
         specialistSubjects.map((subject) => [subject.name, subject.color])
       );
@@ -1116,6 +1108,9 @@
         ) {
           return false;
         }
+        if (source === "auto" && wouldCreateThreeConsecutiveSpecialists(className, day, period, nextEntry)) {
+          return false;
+        }
         if (hasSpecialistConflict(className, day, period, nextEntry, showAlert)) {
           return false;
         }
@@ -1166,6 +1161,27 @@
         return false;
       }
 
+      function wouldCreateThreeConsecutiveSpecialists(className, day, period, nextEntry) {
+        if (!allSpecialistSubjectNames.has(nextEntry.subject)) return false;
+
+        let consecutive = 0;
+        for (let currentPeriod = 1; currentPeriod <= maxPeriodCount; currentPeriod += 1) {
+          let currentEntry = getEntry(className, day, currentPeriod);
+          if (currentPeriod === period) {
+            currentEntry = nextEntry;
+          }
+
+          if (currentEntry && allSpecialistSubjectNames.has(currentEntry.subject)) {
+            consecutive += 1;
+            if (consecutive >= 3) return true;
+          } else {
+            consecutive = 0;
+          }
+        }
+
+        return false;
+      }
+
       function findRandomAutoAssignableSlot(className, subject) {
         const candidates = [];
 
@@ -1180,12 +1196,14 @@
               for (const pePlace of ["강당", "운동장"]) {
                 const candidate = { subject: "체육", pePlace };
                 if (!hasSpecialistConflict(className, day, period, candidate, false)) {
+                  if (wouldCreateThreeConsecutiveSpecialists(className, day, period, candidate)) continue;
                   candidates.push({ day, period, entry: candidate });
                 }
               }
             } else {
               const candidate = { subject };
               if (!hasSpecialistConflict(className, day, period, candidate, false)) {
+                if (wouldCreateThreeConsecutiveSpecialists(className, day, period, candidate)) continue;
                 candidates.push({ day, period, entry: candidate });
               }
             }
